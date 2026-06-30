@@ -1,9 +1,9 @@
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 from app.embeddings.providers.base import EmbeddingProvider
 
-load_dotenv(f".env.{os.getenv('ENV', 'development')}")
+load_dotenv()
 
 class GeminiEmbeddingProvider(EmbeddingProvider):
     """

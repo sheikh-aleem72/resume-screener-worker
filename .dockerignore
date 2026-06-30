@@ -1,0 +1,15 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+.cache
+.huggingface
+models
+data
+logs
+tests
+node_modules
+dist

@@ -7,15 +7,17 @@ from rq import Worker, Queue, job
 from app.services.tasks import process_resume
 from app.utils.log_context import set_log_context
 from app.utils.logger import logger
-from app.utils.mongo import resume_processings_collection
+from app.utils.mongo import resume_processings_collection, job_descriptions_collection
 from bson.objectid import ObjectId
 from dotenv import load_dotenv
+from app.utils.exceptions import JobDeletedError
 
-load_dotenv(f".env.{os.getenv('ENV', 'development')}")
+load_dotenv()
 # ------------------------------
 # ENV CONFIG
 # ------------------------------
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
+# For local system
 CALLBACK_URL = os.getenv("CALLBACK_URL", "http://localhost:5000/api/v1/processing/callback")
 MONGO_URI = os.getenv("MONGO_URI_PY", "mongodb://localhost:27017/resume_screener_dev")
 
@@ -23,6 +25,12 @@ MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 BASE_DELAY = int(os.getenv("BASE_DELAY_SECONDS", "5"))
 RETRY_SET = os.getenv("BATCH_RETRY_SET", "rq:retry")
 QUEUE_NAME = os.getenv("BATCH_QUEUE_NAME", "batch-processing")
+
+
+# For docker container
+# API_BASE_URL = os.environ["API_BASE_URL"]
+# CALLBACK_URL = f"{API_BASE_URL}/api/v1/processing/callback"
+
 
 # ------------------------------
 # CONNECTIONS
@@ -52,10 +60,28 @@ class JSONWorker(Worker):
             externalResumeId=external_resume_id
         )
 
-        logger.info(f"🚀 Job started{job.id} | Resume {external_resume_id} | Batch {batch_id}\n")
+        logger.info(f"🚀 Job started {job.id} | Resume {external_resume_id} | Batch {batch_id}\n")
         logger.info("\n\n=========================================================")
 
         try:
+
+            # Checking if Job exists or not
+            job_doc = job_descriptions_collection.find_one({
+                "_id": ObjectId(payload["jobDescriptionId"])
+            })
+
+            if not job_doc or job_doc.get("status") != "active":
+                logger.warning("⛔ Job is deleted or inactive. Skipping processing.")
+
+                # mark as skipped instead of retrying
+                resume_processings_collection.update_one(
+                    {"_id": ObjectId(resume_processing_id)},
+                    {"$set": {"status": "skipped"}}
+                )
+
+                redis_conn.delete(job_redis_key)
+                return True
+
             # ------------------------------
             # STEP 1 — Update resume status to PROCESSING in Mongo
             # ------------------------------
@@ -66,10 +92,10 @@ class JSONWorker(Worker):
 
             logger.info(f"⚙️ Mongo update: resume {external_resume_id} → processing\n\n")
 
+            
+
         except Exception as e:
             print(f"❌ Failed to set processing state: {e}")
-
-        
         try:
             # ------------------------------
             # STEP 2 — execute business logic
@@ -102,7 +128,22 @@ class JSONWorker(Worker):
             return True
 
         except Exception as err:
-            logger.exception("❌ Job failed")
+            if isinstance(err, JobDeletedError):
+                logger.warning("⛔ Job deleted — skipping")
+            else:
+                logger.exception("❌ Job failed")
+
+            # NON-RETRYABLE CASE
+            if isinstance(err, JobDeletedError):
+                logger.warning("Job deleted — skipping retry")
+
+                resume_processings_collection.update_one(
+                    {"_id": ObjectId(resume_processing_id)},
+                    {"$set": {"status": "skipped"}}
+                )
+
+                redis_conn.delete(job_redis_key)
+                return True    
 
             # ------------------------------
             # STEP 5 — retry or fail

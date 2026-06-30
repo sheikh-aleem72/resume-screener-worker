@@ -3,7 +3,11 @@ import subprocess
 import sys
 from dotenv import load_dotenv
 
-load_dotenv(f".env.{os.getenv('ENV', 'development')}")
+
+load_dotenv()
+# os.environ["HF_HOME"] = "/models/huggingface"
+# os.environ["TRANSFORMERS_CACHE"] = "/models/transformers"
+# os.environ["TORCH_HOME"] = "/models/torch"
 
 WORKER_COUNT = int(os.getenv("ANALYSIS_WORKER_COUNT", "1"))
 

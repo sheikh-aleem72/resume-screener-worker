@@ -15,11 +15,12 @@ from app.analysis.validator import validate_analysis_output
 from app.utils.logger import logger
 from dotenv import load_dotenv
 
-load_dotenv(f".env.{os.getenv('ENV', 'development')}")
+load_dotenv()
 
 ANALYSIS_QUEUE = "analysis-processing"
 ANALYSIS_RETRY_SET = os.getenv("ANALYSIS_RETRY_SET", 'rq:analysis-retry')
-redis_conn = Redis.from_url("redis://localhost:6379")
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
+redis_conn = Redis.from_url(REDIS_URL)
 queue = Queue(ANALYSIS_QUEUE, connection=redis_conn)
 
 
@@ -28,12 +29,12 @@ class JSONWorker(Worker):
     def execute_job(self, job: job, queue):
         """Executes a single resume-analysis job with retry + safe callbacks."""
 
-        logger.inf("===============================================================")
+        logger.info("===============================================================")
         payload = json.loads(job.data)
         resume_processing_id = payload["resumeProcessingId"]
 
         rp = resume_processings_collection.find_one({"_id": ObjectId(resume_processing_id)})
-        logger.info(f"Analysis started for Resume: {rp.get("externalResumeId")}")
+        logger.info(f"Analysis started for Resume: {rp.get('externalResumeId')}")
         if not rp:
             logger.info(f"resume processing not found for {resume_processing_id}")
             return

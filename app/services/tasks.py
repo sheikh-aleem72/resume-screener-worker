@@ -18,6 +18,7 @@ from app.embeddings.skill_match import compute_skill_match_ratio
 from app.explanation.skills_mapping import build_skill_explanation
 from app.explanation.decision_builder import build_decision_explanation
 from app.explanation.score_breakdown import build_score_breakdown
+from app.utils.exceptions import JobDeletedError
 
 def process_resume(job_payload):
     """
@@ -34,6 +35,7 @@ def process_resume(job_payload):
         resume_processing_id = job_payload["resumeProcessingId"]
         external_resume_id = job_payload["externalResumeId"]
         job_description_id = job_payload["jobDescriptionId"]
+        bson_job_description_id = ObjectId(job_description_id)
 
         # 1. Download
         logger.info("Downloading resume\n")
@@ -42,6 +44,17 @@ def process_resume(job_payload):
         # 2. Extract text
         logger.info("Extracting text\n")
         raw_text = extract_raw_text(file_path, mime)
+
+        job_doc = job_descriptions_collection.find_one({
+            "_id": bson_job_description_id
+        })
+
+    
+
+        if not job_doc or job_doc.get("status") != "active":
+            
+            logger.warning("Job deleted during extraction. Aborting.")
+            raise JobDeletedError("Job deleted mid-processing")
         
         logger.info("Text extraction completed\n")
 
@@ -59,8 +72,21 @@ def process_resume(job_payload):
         # 4. ---- HASHING ----
         resume_hash = sha256_hash(normalized_resume_text)
 
+
         # Job text should already be stored in DB or payload
-        bson_job_description_id = ObjectId(job_description_id)
+
+        # Check Job exists or not
+        job_doc = job_descriptions_collection.find_one({
+            "_id": bson_job_description_id
+        })
+
+
+        if not job_doc or job_doc.get("status") != "active":
+            
+            logger.warning("Job deleted during extraction. Aborting.")            
+            logger.warning("Job deleted mid-processing. Aborting safely.")
+            raise JobDeletedError("Job deleted mid-processing")
+                
         job_doc = job_descriptions_collection.find_one(
             {"_id": bson_job_description_id},
             {
@@ -72,12 +98,14 @@ def process_resume(job_payload):
                 "experience_level": 1,
                 "min_experience_years": 1,
                 "description": 1,
+                "status": 1,
             }
         )
 
 
-        if not job_doc:
-            raise Exception("Job description not found or empty")
+        if not job_doc or job_doc.get("status") != "active":
+            
+            raise JobDeletedError("Job is deleted or inactive")
 
         job_text_parts = [
             job_doc.get("title", ""),
@@ -145,6 +173,12 @@ def process_resume(job_payload):
         # ----  Generate embeddings ----
         resume_embedding, model_name = generate_embedding(resume_embedding_text)
         job_embedding, _ = generate_embedding(job_embedding_text)
+        job_doc = job_descriptions_collection.find_one({
+            "_id": bson_job_description_id
+        })
+        if not job_doc or job_doc.get("status") != "active":
+            logger.warning("Job deleted during embeddings. Aborting.")
+            raise JobDeletedError("Job deleted mid-processing")
 
 
         resume_processings_collection.update_one(

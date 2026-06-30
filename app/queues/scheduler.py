@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 # -----------------------------
 # ENV CONFIG
 # -----------------------------
-load_dotenv(f".env.{os.getenv('ENV', 'development')}")
+load_dotenv()
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
 POLL_INTERVAL = float(os.getenv("RETRY_SCHED_POLL_INTERVAL", "1"))  # seconds
 
@@ -20,6 +20,11 @@ RETRY_CONFIGS = [
         "queue": os.getenv("ANALYSIS_QUEUE_NAME", "analysis-processing"),
         "retry_set": os.getenv("ANALYSIS_RETRY_SET", "rq:analysis-retry"),
     },
+    {
+        'queue': os.getenv("DELETE_QUEUE_NAME", 'job-cleanup'),
+        "retry_set": os.getenv("DELETE_RETRY_SET","rq:delete-retry"),
+    }
+
 ]
 
 # -----------------------------

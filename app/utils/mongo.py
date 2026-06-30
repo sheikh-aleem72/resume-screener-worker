@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-load_dotenv(f".env.{os.getenv('ENV', 'development')}")
+load_dotenv()
 
 # -------------------------
 # Mongo connection
@@ -30,3 +30,4 @@ parsed_resume_collection = db["parsedresumes"]
 resume_analysis_collection = db["resumeanalyses"]
 job_descriptions_collection = db["jobs"]
 batches = db["batches"]
+resumes_collection = db["resumes"]

@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-load_dotenv(f".env.{os.getenv('ENV', 'development')}")
+load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI_PY")
 if not MONGO_URI:

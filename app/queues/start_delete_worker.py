@@ -10,7 +10,8 @@ load_dotenv()
 # os.environ["TORCH_HOME"] = "/models/torch"
 
 
-WORKER_COUNT = int(os.getenv("PY_WORKER_COUNT", "4"))
+# WORKER_COUNT = int(os.getenv("PY_WORKER_COUNT", "4"))
+WORKER_COUNT = 1
 
 # Detect the current python executable (the one running this script)
 PYTHON_EXECUTABLE = sys.executable
@@ -22,7 +23,7 @@ processes = []
 
 for i in range(WORKER_COUNT):
     print(f"👷 Launching worker #{i+1}")
-    p = subprocess.Popen([PYTHON_EXECUTABLE, "-m", "app.queues.batch_worker"])
+    p = subprocess.Popen([PYTHON_EXECUTABLE, "-m", "app.queues.delete_worker"])
     processes.append(p)
 
 print("All workers started. Press CTRL+C to terminate.")
